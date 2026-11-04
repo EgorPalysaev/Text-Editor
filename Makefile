@@ -1,5 +1,5 @@
 CC = gcc
-CFALGS = -Wextra -Wall -Werror -std=99
+CFALGS = -Wextra -Wall -Werror -std=23
 CLIBS = -lm
 
 edit: text-editor.c
