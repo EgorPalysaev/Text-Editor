@@ -23,10 +23,17 @@ int inputReadKey();
 
 /*** data ***/
 
+typedef struct editorRow {
+    size_t size;
+    char *chars;
+} editorRow;
+
 struct editorConfig {
     int cx, cy;
     int editorRows;
     int editorCols;
+    int numRows;
+    editorRow row;
     struct termios __originalTermios;
 } __UserConfig;
 
@@ -161,23 +168,28 @@ void editorMoveCursor(int key) {
 /*** output ***/
 
 void editorDrawRows(struct abuf *abuf) {
-    for (int y = 0; y < __UserConfig.editorRows; y++) {
-	if (y == __UserConfig.editorRows / 3) {
-	    char welcome[64];
-	    int welcomelen = snprintf(welcome, sizeof welcome, "Text Editor %s", TEXT_EDITOR_VERSION); 
-	    if (welcomelen > __UserConfig.editorCols) welcomelen = 0;
-	    int padding = (__UserConfig.editorCols - welcomelen) / 2;
-	    if (padding) {
+    for (int y = 1; y <= __UserConfig.editorRows; y++) {
+	if (y > __UserConfig.numRows) {
+	    if (y == __UserConfig.editorRows / 3) {
+		char welcome[64];
+		int welcomelen = snprintf(welcome, sizeof welcome, "Text Editor %s", TEXT_EDITOR_VERSION); 
+		if (welcomelen > __UserConfig.editorCols) welcomelen = 0;
+		int padding = (__UserConfig.editorCols - welcomelen) / 2;
+		if (padding) {
+		    abAppend(abuf, "~", 1);
+		    padding--;
+		}
+		while (padding--) abAppend(abuf, " ", 1);
+		abAppend(abuf, welcome, welcomelen);
+	    } else {
 		abAppend(abuf, "~", 1);
-		padding--;
 	    }
-	    while (padding--) abAppend(abuf, " ", 1);
-	    abAppend(abuf, welcome, welcomelen);
+	    if (y <= __UserConfig.editorRows - 1) {
+		abAppend(abuf, "\r\n", 2);
+	    }
 	} else {
-	    abAppend(abuf, "~", 1);
-	}
-	if (y < __UserConfig.editorRows - 1) {
-	    abAppend(abuf, "\r\n", 2);
+	    int len = __UserConfig.row.size;
+	    abAppend(abuf, __UserConfig.row.chars, len);
 	}
     }
 }
@@ -219,9 +231,18 @@ void editorProcessKeypress() {
 /*** file i/o ***/
 
 void openFile(char *filename) {
-    FILE *fp = fopen(filename, "r");
-    if (!fp) die("fopen");
-    fclose(fp);
+    FILE *file = fopen(filename, "r");
+    if (!file) die("fopen");
+
+    char *string = NULL;
+    size_t stringSize = 0;
+    ssize_t tempLineCapacity = getline(string, &stringSize, file);
+
+    __UserConfig.row.size = stringSize;
+    __UserConfig.row.chars = (char *)malloc(stringSize + 1);
+    memcpy(__UserConfig.row.chars, string, stringSize);
+    __UserConfig.row.chars[stringSize] = '\0';
+    __UserConfig.numRows = 1;
 }
 
 
@@ -230,6 +251,7 @@ void openFile(char *filename) {
 void initEditor() {
     __UserConfig.cx = 1;
     __UserConfig.cy = 1;
+    __UserConfig.numRows = 0;
     if (getWindowSize(&__UserConfig.editorRows, &__UserConfig.editorCols) == -1) die("initEditor_getWindowSize");
 }
 
@@ -247,5 +269,6 @@ int main(int argc, char **argv){
 	editorRefreshScrean();
 	editorProcessKeypress();
     }
+    free(__UserConfig.row.chars);
     return 0;
 }
